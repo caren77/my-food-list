@@ -146,10 +146,40 @@
         if(!code) return;
         code = code.replace(/\s+/g, ''); // 清理所有换行和空格
         if(code.indexOf("FOODSYNC:") === 0) code = code.replace("FOODSYNC:", "");
+        
         try {
             var decoded = JSON.parse(decodeURIComponent(escape(atob(code))));
-            if(confirm('导入将覆盖本地数据，确定？')) { db = decoded; refreshUI(); closeImportPanel(); alert('🚀 同步成功！'); }
-        } catch(e) { alert('❌ 解析失败：暗号可能不完整'); }
+            
+            if(confirm('即将把暗号内容合并到现有菜单中，重复的菜品将跳过。确定？')) {
+                // --- 合并逻辑开始 ---
+                decoded.forEach(remoteRest => {
+                    // 在本地找是否有同名餐厅
+                    var localRest = db.find(r => r.name === remoteRest.name);
+                    
+                    if (localRest) {
+                        // 如果餐厅已存在，遍历对方的菜
+                        remoteRest.dishes.forEach(remoteDish => {
+                            // 如果本地餐厅里没有这个名字的菜，就加进去
+                            var hasDish = localRest.dishes.some(d => d.name === remoteDish.name);
+                            if (!hasDish) {
+                                localRest.dishes.push(remoteDish);
+                            }
+                        });
+                    } else {
+                        // 如果是全新的餐厅，直接整改存入
+                        db.push(remoteRest);
+                    }
+                });
+                // --- 合并逻辑结束 ---
+
+                refreshUI();
+                closeImportPanel();
+                alert('🚀 合并同步成功！');
+            }
+        } catch(e) { 
+            console.error(e);
+            alert('❌ 解析失败：暗号可能不完整或格式有误'); 
+        }
     }
 
     // --- 核心操作 ---
