@@ -48,7 +48,7 @@
 
 <div class="sync-bar">
     <button class="sync-btn" onclick="copySyncCode()">📤 导出暗号</button>
-    <button class="sync-btn" onclick="openImportPanel()">📥 导入同步</button>
+    <button class="sync-btn" onclick="generateShareLink()">🔗 分享链接</button> <button class="sync-btn" onclick="openImportPanel()">📥 导入同步</button>
 </div>
 
 <div id="listBody"></div>
@@ -141,46 +141,94 @@
     function openImportPanel() { document.getElementById('importPanel').style.display = 'flex'; }
     function closeImportPanel() { document.getElementById('importPanel').style.display = 'none'; document.getElementById('importTextArea').value = ''; }
     
-    function doImport() {
-        var code = document.getElementById('importTextArea').value.trim();
+       // --- 1. 新增：生成并复制分享链接 ---
+    function generateShareLink() {
+        if(db.length === 0) return alert('没内容可分享');
+        
+        // 压缩键名以缩短 URL 长度
+        const compressed = db.map(r => ({
+            n: r.name,
+            d: r.dishes.map(d => ({
+                n: d.name, t: d.type, r: d.rank, c: d.comment || ""
+            }))
+        }));
+    
+        // 编码数据
+        var code = btoa(unescape(encodeURIComponent(JSON.stringify(compressed))));
+        
+        // 构建完整 URL (保留原路径并添加 data 参数)
+        var baseUrl = window.location.href.split('?')[0];
+        var shareUrl = baseUrl + "?data=" + code;
+    
+        // 复制到剪贴板
+        var tempInput = document.createElement("textarea");
+        document.body.appendChild(tempInput);
+        tempInput.value = shareUrl;
+        tempInput.select();
+        document.execCommand("copy");
+        document.body.removeChild(tempInput);
+        
+        alert('🔗 分享链接已复制！\n直接发给好友，对方点击即可同步。');
+    }
+
+    // --- 2. 修改：doImport 函数（适配短键名并支持参数传入） ---
+    function doImport(externalData) {
+        var code = externalData || document.getElementById('importTextArea').value.trim();
         if(!code) return;
-        code = code.replace(/\s+/g, ''); // 清理所有换行和空格
+        
+        // 清理前缀和空格
+        code = code.replace(/\s+/g, '');
         if(code.indexOf("FOODSYNC:") === 0) code = code.replace("FOODSYNC:", "");
+        if(code.indexOf("FD:") === 0) code = code.replace("FD:", "");
         
         try {
-            var decoded = JSON.parse(decodeURIComponent(escape(atob(code))));
+            var raw = JSON.parse(decodeURIComponent(escape(atob(code))));
             
-            if(confirm('即将把暗号内容合并到现有菜单中，重复的菜品将跳过。确定？')) {
-                // --- 合并逻辑开始 ---
+            // 兼容处理：如果是新格式（有短键名 n），则转换；否则按原格式处理
+            var decoded = (raw[0] && raw[0].hasOwnProperty('n')) ? 
+                raw.map(r => ({
+                    name: r.n,
+                    dishes: r.d.map(d => ({ name: d.n, type: d.t, rank: r.r || d.r, comment: d.c }))
+                })) : raw;
+    
+            if(confirm('发现 ' + decoded.length + ' 家餐厅数据，是否合并到你的菜单？')) {
                 decoded.forEach(remoteRest => {
-                    // 在本地找是否有同名餐厅
                     var localRest = db.find(r => r.name === remoteRest.name);
-                    
                     if (localRest) {
-                        // 如果餐厅已存在，遍历对方的菜
                         remoteRest.dishes.forEach(remoteDish => {
-                            // 如果本地餐厅里没有这个名字的菜，就加进去
-                            var hasDish = localRest.dishes.some(d => d.name === remoteDish.name);
-                            if (!hasDish) {
+                            if (!localRest.dishes.some(d => d.name === remoteDish.name)) {
                                 localRest.dishes.push(remoteDish);
                             }
                         });
                     } else {
-                        // 如果是全新的餐厅，直接整改存入
                         db.push(remoteRest);
                     }
                 });
-                // --- 合并逻辑结束 ---
-
                 refreshUI();
                 closeImportPanel();
-                alert('🚀 合并同步成功！');
+                // 清理 URL 参数，防止刷新页面再次触发导入
+                window.history.replaceState({}, document.title, window.location.pathname);
+                alert('🚀 合并成功！');
             }
         } catch(e) { 
-            console.error(e);
-            alert('❌ 解析失败：暗号可能不完整或格式有误'); 
+            alert('❌ 解析失败：数据可能已损坏'); 
         }
     }
+    
+    // --- 3. 修改：window.onload 自动识别参数 ---
+    window.onload = function() {
+        refreshUI();
+        
+        // 检查 URL 是否带了 data 参数
+        const urlParams = new URLSearchParams(window.location.search);
+        const sharedData = urlParams.get('data');
+        if (sharedData) {
+            // 延迟一点点弹出，确保页面已渲染
+            setTimeout(() => {
+                doImport(sharedData);
+            }, 500);
+        }
+    };
 
     // --- 核心操作 ---
     function openEditPanel(ri, di) {
