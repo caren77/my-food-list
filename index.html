@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>饭痴抽奖器 v9.0 Safari版</title>
+    <style>
+        :root { --primary: #6366f1; --meat: #f87171; --veg: #4ade80; --soup: #fbbf24; --drink: #60a5fa; --dessert: #f472b6; --bg: #f3f4f6; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); margin: 0; padding: 15px; padding-bottom: 280px; -webkit-tap-highlight-color: transparent; }
+        
+        .sync-bar { display: flex; gap: 10px; margin-bottom: 15px; }
+        .sync-btn { flex: 1; padding: 12px; border-radius: 12px; border: none; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); font-size: 13px; color: var(--primary); font-weight: 600; }
+
+        #importPanel { display: none; position: fixed; inset: 0; background: #fff; z-index: 500; padding: 20px; flex-direction: column; }
+        .full-textarea { flex: 1; width: 100%; border: 1px solid #ddd; border-radius: 12px; padding: 12px; box-sizing: border-box; font-size: 16px; margin-bottom: 15px; background: #f9f9f9; }
+
+        .card { background: white; border-radius: 18px; padding: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 15px; border: 1px solid rgba(0,0,0,0.03); }
+        .rest-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px; }
+        .rest-name { font-size: 1.1rem; font-weight: bold; border: none; width: 65%; background: transparent; color: #1f2937; }
+        
+        .tag { padding: 6px 10px; border-radius: 8px; font-size: 13px; margin: 0 6px 6px 0; display: inline-block; background: #f3f4f6; color: #374151; }
+        .rank-夯 { background: #fee2e2; color: #991b1b; } .rank-顶级 { background: #fef3c7; color: #92400e; }
+        .rank-人上人 { background: #dcfce7; color: #166534; } .rank-NPC { background: #f3f4f6; color: #4b5563; }
+        .rank-拉完了 { background: #374151; color: #fff; text-decoration: line-through; }
+        
+        .c-荤 { color: var(--meat); } .c-素 { color: var(--veg); } .c-锅 { color: var(--soup); } .c-饮 { color: var(--drink); } .c-甜 { color: var(--dessert); }
+
+        #editPanel { display: none; position: fixed; bottom: 0; left: 0; right: 0; background: white; border-radius: 24px 24px 0 0; padding: 25px; box-shadow: 0 -10px 40px rgba(0,0,0,0.15); z-index: 200; }
+        .btn-group { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
+        .toggle-btn { flex: 1; min-width: 60px; padding: 10px 2px; border: 1px solid #e5e7eb; border-radius: 10px; text-align: center; font-size: 13px; background: #fff; color: #4b5563; }
+        .toggle-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+        
+        .input-box { width: 100%; padding: 14px; border: 1px solid #e5e7eb; border-radius: 12px; box-sizing: border-box; margin-bottom: 12px; font-size: 16px; outline: none; }
+        .comment-box { width: 100%; height: 70px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 12px; box-sizing: border-box; font-size: 14px; background: #f9fafb; margin-bottom: 15px; }
+
+        .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,0.95); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); padding: 15px; border-top: 1px solid #eee; z-index: 100; }
+        .dice-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px; }
+        .dice-item { font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 6px; background: #f3f4f6; padding: 8px; border-radius: 10px; }
+        .dice-item input { width: 40px; text-align: center; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 16px; }
+        
+        .main-btn { background: var(--primary); color: white; border: none; padding: 16px; border-radius: 14px; font-weight: bold; width: 100%; font-size: 18px; active { opacity: 0.8; } }
+        
+        #overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 300; align-items: center; justify-content: center; }
+        .res-card { background: white; width: 88%; border-radius: 28px; padding: 30px; text-align: center; max-height: 80vh; overflow-y: auto; }
+    </style>
+</head>
+<body>
+
+<div class="sync-bar">
+    <button class="sync-btn" onclick="copySyncCode()">📤 导出暗号</button>
+    <button class="sync-btn" onclick="openImportPanel()">📥 导入同步</button>
+</div>
+
+<div id="listBody"></div>
+
+<div style="padding: 10px; margin-bottom: 20px;">
+    <button onclick="handleAddRest()" style="background:#fff; color:#94a3b8; border:2px dashed #cbd5e1; width:100%; padding:18px; border-radius:18px; font-weight:bold; font-size:16px;">+ 新增餐厅卡片</button>
+</div>
+
+<div id="importPanel">
+    <h3 style="margin-top:0">导入同步暗号</h3>
+    <textarea id="importTextArea" class="full-textarea" placeholder="在此粘贴对方发来的暗号..."></textarea>
+    <div style="display:flex; gap:12px;">
+        <button onclick="doImport()" class="main-btn" style="flex:2">确认同步</button>
+        <button onclick="closeImportPanel()" style="background:#f3f4f6; color:#4b5563; flex:1" class="main-btn">取消</button>
+    </div>
+</div>
+
+<div id="editPanel">
+    <h3 id="panelTitle" style="margin:0 0 15px 0">编辑菜品</h3>
+    <input type="text" id="dishInput" class="input-box" placeholder="输入菜名">
+    <div class="btn-group">
+        <button class="toggle-btn t-btn" onclick="selType('荤')">🍖荤</button>
+        <button class="toggle-btn t-btn" onclick="selType('素')">🥬素</button>
+        <button class="toggle-btn t-btn" onclick="selType('锅')">🍲锅</button>
+        <button class="toggle-btn t-btn" onclick="selType('饮')">🥤饮</button>
+        <button class="toggle-btn t-btn" onclick="selType('甜')">🍰甜</button>
+    </div>
+    <div class="btn-group">
+        <button class="toggle-btn r-btn" onclick="selRank('夯')">夯</button>
+        <button class="toggle-btn r-btn" onclick="selRank('顶级')">顶级</button>
+        <button class="toggle-btn r-btn" onclick="selRank('人上人')">人上人</button>
+        <button class="toggle-btn r-btn" onclick="selRank('NPC')">NPC</button>
+        <button class="toggle-btn r-btn" onclick="selRank('拉完了')">拉完了</button>
+    </div>
+    <textarea id="commentInput" class="comment-box" placeholder="写点评价吧..."></textarea>
+    <div style="display:flex; gap:12px;">
+        <button onclick="doSaveDish()" class="main-btn" style="flex:2">保存修改</button>
+        <button onclick="doDeleteDish()" id="delDishBtn" style="background:#fee2e2; color:#ef4444; flex:1; display:none;" class="main-btn">删除</button>
+        <button onclick="closeEditPanel()" style="background:#f3f4f6; color:#4b5563; flex:1" class="main-btn">取消</button>
+    </div>
+</div>
+
+<div class="bottom-bar">
+    <select id="restSelect" style="width:100%; padding:12px; border-radius:12px; border:1px solid #e5e7eb; margin-bottom:12px; font-size:16px; -webkit-appearance: none; background: #fff;"></select>
+    <div class="dice-grid">
+        <div class="dice-item">🍖<input type="number" id="num-荤" value="2"></div>
+        <div class="dice-item">🥬<input type="number" id="num-素" value="1"></div>
+        <div class="dice-item">🍲<input type="number" id="num-锅" value="1"></div>
+        <div class="dice-item">🥤<input type="number" id="num-饮" value="1"></div>
+        <div class="dice-item">🍰<input type="number" id="num-甜" value="0"></div>
+    </div>
+    <button class="main-btn" onclick="rollDice()">🎲 掷骰子选菜</button>
+</div>
+
+<div id="overlay" onclick="this.style.display='none'"><div class="res-card" id="resText"></div></div>
+
+<script>
+    var storageKey = 'food_app_safari_v9';
+    var db = JSON.parse(localStorage.getItem(storageKey)) || [];
+    var typeIcons = {'荤':'🍖','素':'🥬','锅':'🍲','饮':'🥤','甜':'🍰'};
+    var curRestIdx = -1, curDishIdx = -1, curType = '荤', curRank = '顶级';
+
+    function refreshUI() {
+        localStorage.setItem(storageKey, JSON.stringify(db));
+        var listBody = document.getElementById('listBody'), select = document.getElementById('restSelect'), html = '';
+        select.innerHTML = '';
+        db.forEach((r, i) => {
+            var tagsHtml = r.dishes.map((d, di) => `<div class="tag rank-${d.rank}" onclick="openEditPanel(${i}, ${di})"><span class="c-${d.type}">${typeIcons[d.type]}</span> ${d.name}${d.comment?' 💬':''}</div>`).join('');
+            html += `<div class="card"><div class="rest-header"><input class="rest-name" value="${r.name}" onblur="db[${i}].name=this.value;refreshUI()">
+                    <button onclick="openEditPanel(${i}, -1)" style="border:none;background:var(--primary);color:#fff;border-radius:10px;padding:6px 12px;font-size:13px;">+ 加菜</button></div>
+                    <div style="min-height:20px;">${tagsHtml}</div><div style="text-align:right;margin-top:10px;"><span onclick="if(confirm('删除餐厅？')){db.splice(${i},1);refreshUI()}" style="color:#cbd5e1;font-size:11px;">删除该卡片</span></div></div>`;
+            select.add(new Option(r.name, i));
+        });
+        listBody.innerHTML = html || '<p style="text-align:center;color:#94a3b8;margin-top:60px;font-size:14px;">空空如也，点击下方添加新餐厅</p>';
+    }
+
+    // --- 同步逻辑 (兼容安卓) ---
+    function copySyncCode() {
+        if(db.length === 0) return alert('没内容可分享');
+        var code = btoa(unescape(encodeURIComponent(JSON.stringify(db))));
+        var tempInput = document.createElement("textarea");
+        document.body.appendChild(tempInput);
+        tempInput.value = "FOODSYNC:" + code;
+        tempInput.select();
+        document.execCommand("copy");
+        document.body.removeChild(tempInput);
+        alert('🎉 暗号已复制！\n发给朋友后，对方在“导入同步”里粘贴即可。');
+    }
+
+    function openImportPanel() { document.getElementById('importPanel').style.display = 'flex'; }
+    function closeImportPanel() { document.getElementById('importPanel').style.display = 'none'; document.getElementById('importTextArea').value = ''; }
+    
+    function doImport() {
+        var code = document.getElementById('importTextArea').value.trim();
+        if(!code) return;
+        code = code.replace(/\s+/g, ''); // 清理所有换行和空格
+        if(code.indexOf("FOODSYNC:") === 0) code = code.replace("FOODSYNC:", "");
+        try {
+            var decoded = JSON.parse(decodeURIComponent(escape(atob(code))));
+            if(confirm('导入将覆盖本地数据，确定？')) { db = decoded; refreshUI(); closeImportPanel(); alert('🚀 同步成功！'); }
+        } catch(e) { alert('❌ 解析失败：暗号可能不完整'); }
+    }
+
+    // --- 核心操作 ---
+    function openEditPanel(ri, di) {
+        curRestIdx = ri; curDishIdx = di;
+        var delBtn = document.getElementById('delDishBtn');
+        if (di === -1) {
+            document.getElementById('panelTitle').innerText = "添加新菜品";
+            document.getElementById('dishInput').value = ""; document.getElementById('commentInput').value = "";
+            delBtn.style.display = 'none'; selType('荤'); selRank('顶级');
+        } else {
+            var d = db[ri].dishes[di];
+            document.getElementById('panelTitle').innerText = "修改菜品信息";
+            document.getElementById('dishInput').value = d.name; document.getElementById('commentInput').value = d.comment || "";
+            delBtn.style.display = 'block'; selType(d.type); selRank(d.rank);
+        }
+        document.getElementById('editPanel').style.display = 'block';
+    }
+
+    function doSaveDish() {
+        var name = document.getElementById('dishInput').value.trim();
+        if(!name) return;
+        var dish = { name: name, type: curType, rank: curRank, comment: document.getElementById('commentInput').value };
+        if (curDishIdx === -1) db[curRestIdx].dishes.push(dish); else db[curRestIdx].dishes[curDishIdx] = dish;
+        document.getElementById('editPanel').style.display = 'none'; refreshUI();
+    }
+
+    function doDeleteDish() { if(confirm('删除此菜？')) { db[curRestIdx].dishes.splice(curDishIdx, 1); document.getElementById('editPanel').style.display = 'none'; refreshUI(); } }
+    
+    function selType(t) { curType = t; var btns = document.getElementsByClassName('t-btn'); for(var i=0; i<btns.length; i++) btns[i].className = btns[i].innerText.includes(t) ? 'toggle-btn t-btn active' : 'toggle-btn t-btn'; }
+    function selRank(r) { curRank = r; var btns = document.getElementsByClassName('r-btn'); for(var i=0; i<btns.length; i++) btns[i].className = btns[i].innerText === r ? 'toggle-btn r-btn active' : 'toggle-btn r-btn'; }
+    function closeEditPanel() { document.getElementById('editPanel').style.display = 'none'; }
+    function handleAddRest() { db.push({ name: '我的秘密餐厅', dishes: [] }); refreshUI(); }
+
+    function rollDice() {
+        var idx = document.getElementById('restSelect').value; if(idx === "") return alert('请先添加餐厅');
+        var rest = db[idx], final = [], weightMap = {'夯':12, '顶级':8, '人上人':4, 'NPC':1, '拉完了':0};
+        ['荤','素','锅','饮','甜'].forEach(cat => {
+            var num = parseInt(document.getElementById('num-'+cat).value) || 0;
+            var list = rest.dishes.filter(d => d.type === cat), pool = [];
+            list.forEach(item => { for(var j=0; j<(weightMap[item.rank]||0); j++) pool.push(item); });
+            for(var k=0; k<num; k++) {
+                if(pool.length == 0) break;
+                var randIdx = Math.floor(Math.random()*pool.length);
+                var picked = pool[randIdx];
+                final.push(picked); pool = pool.filter(p => p.name !== picked.name);
+            }
+        });
+        var resHtml = '<h2 style="color:var(--primary);margin-top:0;">🎲 抽选结果</h2>';
+        resHtml += final.map(d => `<div style="margin:15px 0; text-align:left; border-left:4px solid var(--primary); padding-left:12px;">
+            <div style="font-size:18px;">${typeIcons[d.type]} <b>${d.name}</b></div>
+            ${d.comment?`<div style="font-size:13px;color:#666;margin-top:4px;">“${d.comment}”</div>`:''}
+        </div>`).join('') || "当前类别下没有菜品可抽";
+        document.getElementById('resText').innerHTML = resHtml + '<button class="main-btn" style="margin-top:20px">收下圣旨</button>';
+        document.getElementById('overlay').style.display = 'flex';
+    }
+
+    window.onload = refreshUI;
+</script>
+</body>
+</html>
